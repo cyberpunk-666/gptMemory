@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import sqlite3
 from sqlite3 import Error
+import json
 
 app = Flask(__name__)
 
@@ -39,7 +40,7 @@ def store_memory():
         sql = ''' INSERT INTO memory(memory_data)
                   VALUES(?) '''
         cur = conn.cursor()
-        cur.execute(sql, (memory_data,))
+        cur.execute(sql, (json.dumps(memory_data),))  # Convert dictionary to JSON string
         conn.commit()
         return jsonify({"message": "Memory stored successfully!"}), 201
     except Error as e:
@@ -59,7 +60,7 @@ def retrieve_memory():
         rows = cur.fetchall()
         memories = []
         for row in rows:
-            memories.append({"id": row[0], "memory_data": row[1]})
+            memories.append({"id": row[0], "memory_data": json.loads(row[1])})  # Convert JSON string back to dictionary
         return jsonify(memories), 200
     except Error as e:
         print(e)
