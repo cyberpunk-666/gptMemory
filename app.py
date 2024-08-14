@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import sqlite3
 from sqlite3 import Error
 import json
@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # Database setup
 def create_connection():
-    conn = None;
+    conn = None
     try:
         conn = sqlite3.connect('memory.db')
     except Error as e:
@@ -69,6 +69,48 @@ def retrieve_memory():
     finally:
         if conn:
             conn.close()
+
+# Update memory endpoint
+@app.route('/update-memory/<int:id>', methods=['PUT'])
+def update_memory(id):
+    memory_data = request.json.get('memory_data')
+    conn = create_connection()
+    try:
+        sql = ''' UPDATE memory
+                  SET memory_data = ?
+                  WHERE id = ?'''
+        cur = conn.cursor()
+        cur.execute(sql, (json.dumps(memory_data), id))
+        conn.commit()
+        return jsonify({"message": "Memory updated successfully!"}), 200
+    except Error as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# Delete memory endpoint
+@app.route('/delete-memory/<int:id>', methods=['DELETE'])
+def delete_memory(id):
+    conn = create_connection()
+    try:
+        sql = 'DELETE FROM memory WHERE id=?'
+        cur = conn.cursor()
+        cur.execute(sql, (id,))
+        conn.commit()
+        return jsonify({"message": "Memory deleted successfully!"}), 200
+    except Error as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# Web interface
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 if __name__ == '__main__':
     host = os.getenv('FLASK_HOST', '127.0.0.1')  # Default to 127.0.0.1 if FLASK_HOST is not set

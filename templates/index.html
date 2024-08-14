@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        button {
+            padding: 5px 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Memory Manager</h1>
+    <table id="memoryTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Memory Data</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+    <button onclick="fetchMemories()">Refresh Memories</button>
+
+    <h2>Add New Memory</h2>
+    <textarea id="newMemoryData" rows="4" cols="50"></textarea><br>
+    <button onclick="addMemory()">Add Memory</button>
+
+    <script>
+        function fetchMemories() {
+            fetch('/retrieve-memory')
+                .then(response => response.json())
+                .then(data => {
+                    const tableBody = document.getElementById('memoryTable').getElementsByTagName('tbody')[0];
+                    tableBody.innerHTML = '';
+                    data.forEach(memory => {
+                        const row = tableBody.insertRow();
+                        row.insertCell(0).innerHTML = memory.id;
+                        row.insertCell(1).innerHTML = JSON.stringify(memory.memory_data, null, 2);
+                        const actionsCell = row.insertCell(2);
+                        actionsCell.innerHTML = `
+                            <button onclick="editMemory(${memory.id})">Edit</button>
+                            <button onclick="deleteMemory(${memory.id})">Delete</button>
+                        `;
+                    });
+                });
+        }
+
+        function addMemory() {
+            const memoryData = document.getElementById('newMemoryData').value;
+            fetch('/store-memory', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ memory_data: JSON.parse(memoryData) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                fetchMemories();
+                document.getElementById('newMemoryData').value = '';
+            });
+        }
+
+        function editMemory(id) {
+            const newMemoryData = prompt('Enter new memory data (JSON format):');
+            if (newMemoryData) {
+                fetch(`/update-memory/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ memory_data: JSON.parse(newMemoryData) })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    fetchMemories();
+                });
+            }
+        }
+
+        function deleteMemory(id) {
+            if (confirm('Are you sure you want to delete this memory?')) {
+                fetch(`/delete-memory/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    fetchMemories();
+                });
+            }
+        }
+
+        // Initial fetch of memories when the page loads
+        window.onload = fetchMemories;
+    </script>
+</body>
+</html>
