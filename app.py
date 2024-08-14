@@ -2,12 +2,13 @@ from flask import Flask, request, jsonify
 import sqlite3
 from sqlite3 import Error
 import json
+import os
 
 app = Flask(__name__)
 
 # Database setup
 def create_connection():
-    conn = None
+    conn = None;
     try:
         conn = sqlite3.connect('memory.db')
     except Error as e:
@@ -70,4 +71,6 @@ def retrieve_memory():
             conn.close()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    host = os.getenv('FLASK_HOST', '127.0.0.1')  # Default to 127.0.0.1 if FLASK_HOST is not set
+    port = int(os.getenv('FLASK_PORT', 5000))    # Default to port 5000 if FLASK_PORT is not set
+    app.run(debug=True, host=host, port=port)
