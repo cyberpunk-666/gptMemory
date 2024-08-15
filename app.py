@@ -1,41 +1,52 @@
 from flask import Flask, request, jsonify, render_template
-import sqlite3
-from sqlite3 import Error
+import psycopg2
+from psycopg2 import Error
 import json
 import os
 
 app = Flask(__name__)
 
-# Get the database path from an environment variable or use a default path
-DATABASE_PATH = os.getenv('DATABASE_PATH', 'memory.db')
+# Get the database connection details from environment variables
+DATABASE_URL = os.getenv('DATABASE_URL')  # Full connection URL if provided
+PGDATABASE = os.getenv('PGDATABASE')
+PGHOST = os.getenv('PGHOST')
+PGPORT = os.getenv('PGPORT')
+PGUSER = os.getenv('PGUSER')
+PGPASSWORD = os.getenv('PGPASSWORD')
 
-# Ensure the directory for the database exists
-db_dir = os.path.dirname(DATABASE_PATH)
-if db_dir:  # If the directory part is not empty
-    os.makedirs(db_dir, exist_ok=True)
-
-# Database setup
+# Database connection
 def create_connection():
     conn = None
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
+        if DATABASE_URL:
+            conn = psycopg2.connect(DATABASE_URL)  # Use DATABASE_URL if available
+        else:
+            conn = psycopg2.connect(
+                database=PGDATABASE,
+                user=PGUSER,
+                password=PGPASSWORD,
+                host=PGHOST,
+                port=PGPORT
+            )
     except Error as e:
-        print(e)
+        print(f"Error connecting to PostgreSQL: {e}")
     return conn
 
 def create_table():
     conn = create_connection()
     try:
         sql_create_memory_table = """ CREATE TABLE IF NOT EXISTS memory (
-                                        id integer PRIMARY KEY,
-                                        memory_data text NOT NULL
+                                        id SERIAL PRIMARY KEY,
+                                        memory_data JSONB NOT NULL
                                     ); """
-        c = conn.cursor()
-        c.execute(sql_create_memory_table)
+        cur = conn.cursor()
+        cur.execute(sql_create_memory_table)
+        conn.commit()
     except Error as e:
-        print(e)
+        print(f"Error creating table: {e}")
     finally:
         if conn:
+            cur.close()
             conn.close()
 
 create_table()
@@ -46,17 +57,19 @@ def store_memory():
     memory_data = request.json.get('memory_data')
     conn = create_connection()
     try:
-        sql = ''' INSERT INTO memory(memory_data)
-                  VALUES(?) '''
+        sql_insert_memory = ''' INSERT INTO memory(memory_data)
+                                VALUES(%s) RETURNING id; '''
         cur = conn.cursor()
-        cur.execute(sql, (json.dumps(memory_data),))  # Convert dictionary to JSON string
+        cur.execute(sql_insert_memory, (json.dumps(memory_data),))  # Store as JSONB
+        memory_id = cur.fetchone()[0]
         conn.commit()
-        return jsonify({"message": "Memory stored successfully!"}), 201
+        return jsonify({"message": "Memory stored successfully!", "id": memory_id}), 201
     except Error as e:
-        print(e)
+        print(f"Error storing memory: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         if conn:
+            cur.close()
             conn.close()
 
 # Retrieve memory endpoint
@@ -65,17 +78,16 @@ def retrieve_memory():
     conn = create_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM memory")
+        cur.execute("SELECT id, memory_data FROM memory")
         rows = cur.fetchall()
-        memories = []
-        for row in rows:
-            memories.append({"id": row[0], "memory_data": json.loads(row[1])})  # Convert JSON string back to dictionary
+        memories = [{"id": row[0], "memory_data": row[1]} for row in rows]
         return jsonify(memories), 200
     except Error as e:
-        print(e)
+        print(f"Error retrieving memories: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         if conn:
+            cur.close()
             conn.close()
 
 # Update memory endpoint
@@ -84,18 +96,19 @@ def update_memory(id):
     memory_data = request.json.get('memory_data')
     conn = create_connection()
     try:
-        sql = ''' UPDATE memory
-                  SET memory_data = ?
-                  WHERE id = ?'''
+        sql_update_memory = ''' UPDATE memory
+                                SET memory_data = %s
+                                WHERE id = %s; '''
         cur = conn.cursor()
-        cur.execute(sql, (json.dumps(memory_data), id))
+        cur.execute(sql_update_memory, (json.dumps(memory_data), id))
         conn.commit()
         return jsonify({"message": "Memory updated successfully!"}), 200
     except Error as e:
-        print(e)
+        print(f"Error updating memory: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         if conn:
+            cur.close()
             conn.close()
 
 # Delete memory endpoint
@@ -103,16 +116,17 @@ def update_memory(id):
 def delete_memory(id):
     conn = create_connection()
     try:
-        sql = 'DELETE FROM memory WHERE id=?'
+        sql_delete_memory = 'DELETE FROM memory WHERE id=%s;'
         cur = conn.cursor()
-        cur.execute(sql, (id,))
+        cur.execute(sql_delete_memory, (id,))
         conn.commit()
         return jsonify({"message": "Memory deleted successfully!"}), 200
     except Error as e:
-        print(e)
+        print(f"Error deleting memory: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         if conn:
+            cur.close()
             conn.close()
 
 # Web interface
