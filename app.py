@@ -37,7 +37,8 @@ def create_table():
     try:
         sql_create_memory_table = """ CREATE TABLE IF NOT EXISTS memory (
                                         id SERIAL PRIMARY KEY,
-                                        memory_data JSONB NOT NULL
+                                        memory_data JSONB NOT NULL,
+                                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                                     ); """
         cur = conn.cursor()
         cur.execute(sql_create_memory_table)
@@ -75,12 +76,27 @@ def store_memory():
 # Retrieve memory endpoint
 @app.route('/retrieve-memory', methods=['GET'])
 def retrieve_memory():
+    created_at = request.args.get('created_at')
+    title = request.args.get('title')
+
     conn = create_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT id, memory_data FROM memory")
+
+        # Base query
+        query = "SELECT id, memory_data, created_at FROM memory WHERE 1=1"
+
+        # Add filters based on provided query parameters
+        if created_at:
+            query += f" AND created_at = '{created_at}'"
+        if title:
+            query += f" AND memory_data->>'title' = '{title}'"
+
+        # Execute the query
+        cur.execute(query)
         rows = cur.fetchall()
-        memories = [{"id": row[0], "memory_data": row[1]} for row in rows]
+
+        memories = [{"id": row[0], "memory_data": row[1], "created_at": row[2]} for row in rows]
         return jsonify(memories), 200
     except Error as e:
         print(f"Error retrieving memories: {e}")
