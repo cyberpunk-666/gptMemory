@@ -9,6 +9,11 @@ app = Flask(__name__)
 # Get the database path from an environment variable or use a default path
 DATABASE_PATH = os.getenv('DATABASE_PATH', 'memory.db')
 
+# Ensure the directory for the database exists
+db_dir = os.path.dirname(DATABASE_PATH)
+if db_dir:  # If the directory part is not empty
+    os.makedirs(db_dir, exist_ok=True)
+
 # Database setup
 def create_connection():
     conn = None
