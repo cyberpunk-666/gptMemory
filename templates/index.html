@@ -168,7 +168,7 @@
                 row.insertCell(3).innerHTML = memory.memory_data.content || 'N/A';
                 const actionsCell = row.insertCell(4);
                 actionsCell.innerHTML = `
-                    <button onclick="openEditModal(${memory.id}, '${encodeURIComponent(memory.memory_data.date)}', '${encodeURIComponent(memory.memory_data.title)}', '${encodeURIComponent(memory.memory_data.content)}')">Edit</button>
+                    <button onclick="openEditModal(${memory.id})">Edit</button>
                     <button onclick="deleteMemory(${memory.id})">Delete</button>
                 `;
             });
@@ -186,7 +186,7 @@
         }
 
         function openAddModal() {
-            newMemoryEditor.setValue(JSON.stringify({ title: "", content: "" }, null, 2), -1);
+            newMemoryEditor.setValue('', -1); // Start with an empty template
             document.getElementById('newMemoryTitle').value = '';
             document.getElementById('addModal').style.display = 'block';
         }
@@ -213,11 +213,12 @@
             });
         }
 
-        function openEditModal(id, date, title, content) {
+        function openEditModal(id) {
             currentEditId = id;
-            document.getElementById('editMemoryDate').value = decodeURIComponent(date);
-            document.getElementById('editMemoryTitle').value = decodeURIComponent(title);
-            editMemoryEditor.setValue(decodeURIComponent(content), -1);
+            const memory = allMemories.find(m => m.id === id);
+            document.getElementById('editMemoryDate').value = memory.memory_data.date || '';
+            document.getElementById('editMemoryTitle').value = memory.memory_data.title || '';
+            editMemoryEditor.setValue(memory.memory_data.content || '', -1);
             document.getElementById('editModal').style.display = 'block';
         }
 
@@ -274,5 +275,7 @@
             }
         }
     </script>
+
+
 </body>
 </html>
