@@ -1,12 +1,21 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session
 import psycopg2
 from psycopg2 import Error
 import json
 import os
+import uuid
 import logging
 from logging.config import dictConfig
+from flask_session import Session
+from datetime import datetime  # Import datetime for getting current date and time
 
 app = Flask(__name__)
+
+# Configure session management
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecretkey')  # Use a secure secret key in production
+app.config['SESSION_TYPE'] = 'filesystem'  # Store session data on the server-side
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # Session lifetime in seconds (e.g., 1 hour)
+Session(app)
 
 # Configure logging
 dictConfig({
@@ -80,6 +89,10 @@ def store_memory():
     memory_data = request.json.get('memory_data')
     conn = create_connection()
     try:
+        # Add the current date and time to the memory data
+        current_datetime = datetime.now().isoformat()  # Get the current date and time in ISO format
+        memory_data['date'] = current_datetime
+
         sql_insert_memory = ''' INSERT INTO memory(memory_data)
                                 VALUES(%s) RETURNING id; '''
         cur = conn.cursor()
@@ -116,21 +129,25 @@ def retrieve_memory():
             conn.close()
 
 # Update memory endpoint
-@app.route('/update-memory/<int:id>', methods=['PUT'])
-def update_memory(id):
+@app.route('/modify-memory', methods=['PUT'])
+def update_memory():
+    memory_id = request.json.get('id')
     memory_data = request.json.get('memory_data')
+    if not memory_id or not memory_data:
+        return jsonify({"error": "Memory ID and data are required"}), 400
+
     conn = create_connection()
     try:
         sql_update_memory = ''' UPDATE memory
                                 SET memory_data = %s
                                 WHERE id = %s; '''
         cur = conn.cursor()
-        cur.execute(sql_update_memory, (json.dumps(memory_data), id))
+        cur.execute(sql_update_memory, (json.dumps(memory_data), memory_id))
         conn.commit()
-        app.logger.info(f"Memory with ID: {id} updated successfully")
+        app.logger.info(f"Memory with ID: {memory_id} updated successfully")
         return jsonify({"message": "Memory updated successfully!"}), 200
     except Error as e:
-        app.logger.error(f"Error updating memory with ID {id}: {e}")
+        app.logger.error(f"Error updating memory with ID {memory_id}: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         if conn:
@@ -138,23 +155,37 @@ def update_memory(id):
             conn.close()
 
 # Delete memory endpoint
-@app.route('/delete-memory/<int:id>', methods=['DELETE'])
-def delete_memory(id):
+@app.route('/delete-memory', methods=['DELETE'])
+def delete_memory():
+    memory_id = request.json.get('id')
+    if not memory_id:
+        return jsonify({"error": "Memory ID is required"}), 400
+
     conn = create_connection()
     try:
         sql_delete_memory = 'DELETE FROM memory WHERE id=%s;'
         cur = conn.cursor()
-        cur.execute(sql_delete_memory, (id,))
+        cur.execute(sql_delete_memory, (memory_id,))
         conn.commit()
-        app.logger.info(f"Memory with ID: {id} deleted successfully")
+        app.logger.info(f"Memory with ID: {memory_id} deleted successfully")
         return jsonify({"message": "Memory deleted successfully!"}), 200
     except Error as e:
-        app.logger.error(f"Error deleting memory with ID {id}: {e}")
+        app.logger.error(f"Error deleting memory with ID {memory_id}: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         if conn:
             cur.close()
             conn.close()
+
+# Session management
+@app.before_request
+def manage_session():
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())  # Generate a new session ID
+        session.permanent = True  # Make the session permanent (persistent cookie)
+        app.logger.info(f"New session started with ID: {session['session_id']}")
+    else:
+        app.logger.info(f"Session resumed with ID: {session['session_id']}")
 
 # Web interface
 @app.route('/')
