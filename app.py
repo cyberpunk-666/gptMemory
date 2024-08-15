@@ -115,7 +115,7 @@ def retrieve_memory():
     conn = create_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT id, memory_data FROM memory")
+        cur.execute("SELECT id, memory_data FROM memory order by id desc")
         rows = cur.fetchall()
         memories = [{"id": row[0], "memory_data": row[1]} for row in rows]
         app.logger.info("Retrieved all memories successfully")
