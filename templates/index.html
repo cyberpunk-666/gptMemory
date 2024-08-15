@@ -29,6 +29,11 @@
             margin: 5px;
             cursor: pointer;
         }
+        input[type="text"], input[type="date"] {
+            padding: 5px;
+            margin: 5px 0;
+            width: calc(100% - 12px);
+        }
         /* Modal styles */
         .modal {
             display: none;
@@ -73,11 +78,21 @@
 </head>
 <body>
     <h1>Memory Manager</h1>
+
+    <h2>Filters</h2>
+    <label for="filterTitle">Title:</label>
+    <input type="text" id="filterTitle" oninput="filterMemories()">
+    <label for="filterDate">Date:</label>
+    <input type="date" id="filterDate" oninput="filterMemories()">
+
+    <h2>Memories</h2>
     <table id="memoryTable">
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Memory Data</th>
+                <th>Date</th>
+                <th>Title</th>
+                <th>Content</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -94,6 +109,9 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('addModal')">&times;</span>
             <h2>Add New Memory</h2>
+            <label for="newMemoryTitle">Title:</label>
+            <input type="text" id="newMemoryTitle">
+            <label for="newMemoryContent">Content:</label>
             <div id="newMemoryEditor"></div><br>
             <button onclick="addMemory()">Save Memory</button>
         </div>
@@ -104,6 +122,11 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('editModal')">&times;</span>
             <h2>Edit Memory</h2>
+            <label for="editMemoryDate">Date:</label>
+            <input type="date" id="editMemoryDate" readonly>
+            <label for="editMemoryTitle">Title:</label>
+            <input type="text" id="editMemoryTitle">
+            <label for="editMemoryContent">Content:</label>
             <div id="editMemoryEditor"></div><br>
             <button onclick="saveMemory()">Save Changes</button>
         </div>
@@ -113,6 +136,7 @@
         let currentEditId = null;
         let newMemoryEditor;
         let editMemoryEditor;
+        let allMemories = [];
 
         function initEditors() {
             newMemoryEditor = ace.edit("newMemoryEditor");
@@ -128,40 +152,58 @@
             fetch('/retrieve-memory')
                 .then(response => response.json())
                 .then(data => {
-                    const tableBody = document.getElementById('memoryTable').getElementsByTagName('tbody')[0];
-                    tableBody.innerHTML = '';
-                    data.forEach(memory => {
-                        const row = tableBody.insertRow();
-                        row.insertCell(0).innerHTML = memory.id;
-                        row.insertCell(1).innerHTML = `<pre>${JSON.stringify(memory.memory_data, null, 2)}</pre>`;
-                        const actionsCell = row.insertCell(2);
-                        actionsCell.innerHTML = `
-                            <button onclick="openEditModal(${memory.id}, '${encodeURIComponent(JSON.stringify(memory.memory_data, null, 2))}')">Edit</button>
-                            <button onclick="deleteMemory(${memory.id})">Delete</button>
-                        `;
-                    });
+                    allMemories = data;  // Save all memories for filtering
+                    displayMemories(data);
                 });
         }
 
+        function displayMemories(memories) {
+            const tableBody = document.getElementById('memoryTable').getElementsByTagName('tbody')[0];
+            tableBody.innerHTML = '';
+            memories.forEach(memory => {
+                const row = tableBody.insertRow();
+                row.insertCell(0).innerHTML = memory.id;
+                row.insertCell(1).innerHTML = memory.memory_data.date || 'N/A';
+                row.insertCell(2).innerHTML = memory.memory_data.title || 'N/A';
+                row.insertCell(3).innerHTML = memory.memory_data.content || 'N/A';
+                const actionsCell = row.insertCell(4);
+                actionsCell.innerHTML = `
+                    <button onclick="openEditModal(${memory.id}, '${encodeURIComponent(memory.memory_data.date)}', '${encodeURIComponent(memory.memory_data.title)}', '${encodeURIComponent(memory.memory_data.content)}')">Edit</button>
+                    <button onclick="deleteMemory(${memory.id})">Delete</button>
+                `;
+            });
+        }
+
+        function filterMemories() {
+            const filterTitle = document.getElementById('filterTitle').value.toLowerCase();
+            const filterDate = document.getElementById('filterDate').value;
+            const filteredMemories = allMemories.filter(memory => {
+                const titleMatch = memory.memory_data.title.toLowerCase().includes(filterTitle);
+                const dateMatch = filterDate ? memory.memory_data.date === filterDate : true;
+                return titleMatch && dateMatch;
+            });
+            displayMemories(filteredMemories);
+        }
+
         function openAddModal() {
-            const currentDate = new Date().toISOString().split('T')[0];
-            const template = {
-                content: "",
-                date: currentDate,
-                title: ""
-            };
-            newMemoryEditor.setValue(JSON.stringify(template, null, 2), -1);
+            newMemoryEditor.setValue(JSON.stringify({ title: "", content: "" }, null, 2), -1);
+            document.getElementById('newMemoryTitle').value = '';
             document.getElementById('addModal').style.display = 'block';
         }
 
         function addMemory() {
-            const memoryData = newMemoryEditor.getValue();
+            const title = document.getElementById('newMemoryTitle').value;
+            const content = newMemoryEditor.getValue();
+            const memoryData = {
+                title: title,
+                content: content
+            };
             fetch('/store-memory', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ memory_data: JSON.parse(memoryData) })
+                body: JSON.stringify({ memory_data: memoryData })
             })
             .then(response => response.json())
             .then(data => {
@@ -171,20 +213,28 @@
             });
         }
 
-        function openEditModal(id, memoryData) {
+        function openEditModal(id, date, title, content) {
             currentEditId = id;
-            editMemoryEditor.setValue(decodeURIComponent(memoryData), -1);
+            document.getElementById('editMemoryDate').value = decodeURIComponent(date);
+            document.getElementById('editMemoryTitle').value = decodeURIComponent(title);
+            editMemoryEditor.setValue(decodeURIComponent(content), -1);
             document.getElementById('editModal').style.display = 'block';
         }
 
         function saveMemory() {
-            const newMemoryData = editMemoryEditor.getValue();
+            const title = document.getElementById('editMemoryTitle').value;
+            const content = editMemoryEditor.getValue();
+            const memoryData = {
+                date: document.getElementById('editMemoryDate').value,
+                title: title,
+                content: content
+            };
             fetch(`/update-memory/${currentEditId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ memory_data: JSON.parse(newMemoryData) })
+                body: JSON.stringify({ memory_data: memoryData })
             })
             .then(response => response.json())
             .then(data => {
