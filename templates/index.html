@@ -29,7 +29,47 @@
             margin: 5px;
             cursor: pointer;
         }
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            padding-top: 60px;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        /* Ace Editor styles */
+        #newMemoryEditor, #editMemoryEditor {
+            height: 200px;
+            width: 100%;
+            border: 1px solid #ccc;
+        }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.13/ace.js"></script>
 </head>
 <body>
     <h1>Memory Manager</h1>
@@ -47,10 +87,43 @@
     <button onclick="fetchMemories()">Refresh Memories</button>
 
     <h2>Add New Memory</h2>
-    <textarea id="newMemoryData" rows="4" cols="50"></textarea><br>
-    <button onclick="addMemory()">Add Memory</button>
+    <button onclick="openAddModal()">Add Memory</button>
+
+    <!-- Modal for Adding New Memory -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('addModal')">&times;</span>
+            <h2>Add New Memory</h2>
+            <div id="newMemoryEditor"></div><br>
+            <button onclick="addMemory()">Save Memory</button>
+        </div>
+    </div>
+
+    <!-- Modal for Editing Memory -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('editModal')">&times;</span>
+            <h2>Edit Memory</h2>
+            <div id="editMemoryEditor"></div><br>
+            <button onclick="saveMemory()">Save Changes</button>
+        </div>
+    </div>
 
     <script>
+        let currentEditId = null;
+        let newMemoryEditor;
+        let editMemoryEditor;
+
+        function initEditors() {
+            newMemoryEditor = ace.edit("newMemoryEditor");
+            newMemoryEditor.setTheme("ace/theme/github");
+            newMemoryEditor.session.setMode("ace/mode/json");
+
+            editMemoryEditor = ace.edit("editMemoryEditor");
+            editMemoryEditor.setTheme("ace/theme/github");
+            editMemoryEditor.session.setMode("ace/mode/json");
+        }
+
         function fetchMemories() {
             fetch('/retrieve-memory')
                 .then(response => response.json())
@@ -60,18 +133,29 @@
                     data.forEach(memory => {
                         const row = tableBody.insertRow();
                         row.insertCell(0).innerHTML = memory.id;
-                        row.insertCell(1).innerHTML = JSON.stringify(memory.memory_data, null, 2);
+                        row.insertCell(1).innerHTML = `<pre>${JSON.stringify(memory.memory_data, null, 2)}</pre>`;
                         const actionsCell = row.insertCell(2);
                         actionsCell.innerHTML = `
-                            <button onclick="editMemory(${memory.id})">Edit</button>
+                            <button onclick="openEditModal(${memory.id}, '${encodeURIComponent(JSON.stringify(memory.memory_data, null, 2))}')">Edit</button>
                             <button onclick="deleteMemory(${memory.id})">Delete</button>
                         `;
                     });
                 });
         }
 
+        function openAddModal() {
+            const currentDate = new Date().toISOString().split('T')[0];
+            const template = {
+                content: "",
+                date: currentDate,
+                title: ""
+            };
+            newMemoryEditor.setValue(JSON.stringify(template, null, 2), -1);
+            document.getElementById('addModal').style.display = 'block';
+        }
+
         function addMemory() {
-            const memoryData = document.getElementById('newMemoryData').value;
+            const memoryData = newMemoryEditor.getValue();
             fetch('/store-memory', {
                 method: 'POST',
                 headers: {
@@ -83,26 +167,31 @@
             .then(data => {
                 alert(data.message);
                 fetchMemories();
-                document.getElementById('newMemoryData').value = '';
+                closeModal('addModal');
             });
         }
 
-        function editMemory(id) {
-            const newMemoryData = prompt('Enter new memory data (JSON format):');
-            if (newMemoryData) {
-                fetch(`/update-memory/${id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ memory_data: JSON.parse(newMemoryData) })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    alert(data.message);
-                    fetchMemories();
-                });
-            }
+        function openEditModal(id, memoryData) {
+            currentEditId = id;
+            editMemoryEditor.setValue(decodeURIComponent(memoryData), -1);
+            document.getElementById('editModal').style.display = 'block';
+        }
+
+        function saveMemory() {
+            const newMemoryData = editMemoryEditor.getValue();
+            fetch(`/update-memory/${currentEditId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ memory_data: JSON.parse(newMemoryData) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                fetchMemories();
+                closeModal('editModal');
+            });
         }
 
         function deleteMemory(id) {
@@ -118,8 +207,22 @@
             }
         }
 
-        // Initial fetch of memories when the page loads
-        window.onload = fetchMemories;
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Initialize Ace Editors on page load
+        window.onload = function() {
+            initEditors();
+            fetchMemories();
+        };
+
+        // Close the modal if the user clicks outside of it
+        window.onclick = function(event) {
+            if (event.target.className.includes('modal')) {
+                event.target.style.display = "none";
+            }
+        }
     </script>
 </body>
 </html>

@@ -6,11 +6,14 @@ import os
 
 app = Flask(__name__)
 
+# Get the database path from an environment variable or use a default path
+DATABASE_PATH = os.getenv('DATABASE_PATH', 'memory.db')
+
 # Database setup
 def create_connection():
     conn = None
     try:
-        conn = sqlite3.connect('memory.db')
+        conn = sqlite3.connect(DATABASE_PATH)
     except Error as e:
         print(e)
     return conn
