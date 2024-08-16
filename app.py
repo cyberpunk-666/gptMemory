@@ -6,16 +6,9 @@ import os
 import uuid
 import logging
 from logging.config import dictConfig
-from flask_session import Session
 from datetime import datetime  # Import datetime for getting current date and time
 
 app = Flask(__name__)
-
-# Configure session management
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecretkey')  # Use a secure secret key in production
-app.config['SESSION_TYPE'] = 'filesystem'  # Store session data on the server-side
-app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # Session lifetime in seconds (e.g., 1 hour)
-Session(app)
 
 # Configure logging
 dictConfig({
@@ -176,16 +169,6 @@ def delete_memory():
         if conn:
             cur.close()
             conn.close()
-
-# Session management
-@app.before_request
-def manage_session():
-    if 'session_id' not in session:
-        session['session_id'] = str(uuid.uuid4())  # Generate a new session ID
-        session.permanent = True  # Make the session permanent (persistent cookie)
-        app.logger.info(f"New session started with ID: {session['session_id']}")
-    else:
-        app.logger.info(f"Session resumed with ID: {session['session_id']}")
 
 # Web interface
 @app.route('/')

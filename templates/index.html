@@ -161,9 +161,10 @@
             const tableBody = document.getElementById('memoryTable').getElementsByTagName('tbody')[0];
             tableBody.innerHTML = '';
             memories.forEach(memory => {
+                const formattedDate = formatDate(memory.memory_data.date);
                 const row = tableBody.insertRow();
                 row.insertCell(0).innerHTML = memory.id;
-                row.insertCell(1).innerHTML = memory.memory_data.date || 'N/A';
+                row.insertCell(1).innerHTML = formattedDate || 'N/A';
                 row.insertCell(2).innerHTML = memory.memory_data.title || 'N/A';
                 row.insertCell(3).innerHTML = memory.memory_data.content || 'N/A';
                 const actionsCell = row.insertCell(4);
@@ -172,6 +173,18 @@
                     <button onclick="deleteMemory(${memory.id})">Delete</button>
                 `;
             });
+        }
+
+        function formatDate(isoDate) {
+            if (!isoDate) return 'N/A';
+            const date = new Date(isoDate);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         }
 
         function filterMemories() {
