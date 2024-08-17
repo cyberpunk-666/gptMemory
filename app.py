@@ -121,22 +121,36 @@ def retrieve_memory():
             cur.close()
             conn.close()
 
-# Update memory endpoint
 @app.route('/modify-memory', methods=['PUT'])
 def update_memory():
     memory_id = request.json.get('id')
-    memory_data = request.json.get('memory_data')
-    if not memory_id or not memory_data:
+    new_memory_data = request.json.get('memory_data')
+
+    if not memory_id or not new_memory_data:
         return jsonify({"error": "Memory ID and data are required"}), 400
 
     conn = create_connection()
     try:
+        cur = conn.cursor()
+
+        # Fetch the existing memory data
+        cur.execute("SELECT memory_data FROM memory WHERE id = %s;", (memory_id,))
+        existing_memory = cur.fetchone()
+
+        if not existing_memory:
+            return jsonify({"error": f"Memory with ID {memory_id} not found"}), 404
+
+        # Load the existing memory data and update it with the new data
+        existing_data = existing_memory[0]  # This is the current memory_data stored in JSONB
+        existing_data.update(new_memory_data)  # Update with new data (preserving date)
+
+        # Perform the update
         sql_update_memory = ''' UPDATE memory
                                 SET memory_data = %s
                                 WHERE id = %s; '''
-        cur = conn.cursor()
-        cur.execute(sql_update_memory, (json.dumps(memory_data), memory_id))
+        cur.execute(sql_update_memory, (json.dumps(existing_data), memory_id))
         conn.commit()
+
         app.logger.info(f"Memory with ID: {memory_id} updated successfully")
         return jsonify({"message": "Memory updated successfully!"}), 200
     except Error as e:
@@ -146,6 +160,7 @@ def update_memory():
         if conn:
             cur.close()
             conn.close()
+
 
 # Delete memory endpoint
 @app.route('/delete-memory', methods=['DELETE'])
