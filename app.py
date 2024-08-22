@@ -184,6 +184,10 @@ def delete_memory():
         if conn:
             cur.close()
             conn.close()
+            
+@app.route('/health-check', methods=['GET'])
+def health_check():
+    return jsonify({"status": "OK"}), 200
 
 # Web interface
 @app.route('/')
