@@ -215,9 +215,10 @@ def health_check():
 
 @app.before_request
 def log_request_info():
-    app.logger.info('Headers: %s', request.headers)
-    app.logger.info('Body: %s', request.get_data())
-
+    if request.path not in ['/health-check']:  # Exclude health-check endpoint
+        app.logger.info('Headers: %s', request.headers)
+        app.logger.info('Body: %s', request.get_data())
+        
 # Web interface
 @app.route('/')
 def index():
