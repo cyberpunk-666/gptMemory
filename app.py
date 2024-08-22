@@ -8,19 +8,26 @@ import logging
 from logging.config import dictConfig
 from datetime import datetime  # Import datetime for getting current date and time
 
+from flask_cors import CORS
+
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Configure logging
 dictConfig({
     'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
-    }},
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-        'stream': 'ext://flask.logging.wsgi_errors_stream',
-        'formatter': 'default'
-    }},
+    'formatters': {
+        'default': {
+            'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+        }
+    },
+    'handlers': {
+        'wsgi': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://flask.logging.wsgi_errors_stream',
+            'formatter': 'default'
+        }
+    },
     'root': {
         'level': 'INFO',
         'handlers': ['wsgi']
@@ -35,26 +42,28 @@ PGPORT = os.getenv('PGPORT')
 PGUSER = os.getenv('PGUSER')
 PGPASSWORD = os.getenv('PGPASSWORD')
 
+
 # Database connection
 def create_connection():
     conn = None
     try:
         if DATABASE_URL:
             app.logger.info("Connecting to PostgreSQL using DATABASE_URL")
-            conn = psycopg2.connect(DATABASE_URL)  # Use DATABASE_URL if available
-        else:
-            app.logger.info("Connecting to PostgreSQL using individual parameters")
             conn = psycopg2.connect(
-                database=PGDATABASE,
-                user=PGUSER,
-                password=PGPASSWORD,
-                host=PGHOST,
-                port=PGPORT
-            )
+                DATABASE_URL)  # Use DATABASE_URL if available
+        else:
+            app.logger.info(
+                "Connecting to PostgreSQL using individual parameters")
+            conn = psycopg2.connect(database=PGDATABASE,
+                                    user=PGUSER,
+                                    password=PGPASSWORD,
+                                    host=PGHOST,
+                                    port=PGPORT)
         app.logger.info("Connected to the database successfully")
     except Error as e:
         app.logger.error(f"Error connecting to PostgreSQL: {e}")
     return conn
+
 
 def create_table():
     conn = create_connection()
@@ -66,7 +75,8 @@ def create_table():
         cur = conn.cursor()
         cur.execute(sql_create_memory_table)
         conn.commit()
-        app.logger.info("Table 'memory' created successfully or already exists")
+        app.logger.info(
+            "Table 'memory' created successfully or already exists")
     except Error as e:
         app.logger.error(f"Error creating table: {e}")
     finally:
@@ -74,7 +84,9 @@ def create_table():
             cur.close()
             conn.close()
 
+
 create_table()
+
 
 # Store memory endpoint
 @app.route('/store-memory', methods=['POST'])
@@ -83,17 +95,22 @@ def store_memory():
     conn = create_connection()
     try:
         # Add the current date and time to the memory data
-        current_datetime = datetime.now().isoformat()  # Get the current date and time in ISO format
+        current_datetime = datetime.now().isoformat(
+        )  # Get the current date and time in ISO format
         memory_data['date'] = current_datetime
 
         sql_insert_memory = ''' INSERT INTO memory(memory_data)
                                 VALUES(%s) RETURNING id; '''
         cur = conn.cursor()
-        cur.execute(sql_insert_memory, (json.dumps(memory_data),))  # Store as JSONB
+        cur.execute(sql_insert_memory,
+                    (json.dumps(memory_data), ))  # Store as JSONB
         memory_id = cur.fetchone()[0]
         conn.commit()
         app.logger.info(f"Memory stored successfully with ID: {memory_id}")
-        return jsonify({"message": "Memory stored successfully!", "id": memory_id}), 201
+        return jsonify({
+            "message": "Memory stored successfully!",
+            "id": memory_id
+        }), 201
     except Error as e:
         app.logger.error(f"Error storing memory: {e}")
         return jsonify({"error": str(e)}), 500
@@ -101,6 +118,7 @@ def store_memory():
         if conn:
             cur.close()
             conn.close()
+
 
 # Retrieve memory endpoint
 @app.route('/retrieve-memory', methods=['GET'])
@@ -121,6 +139,7 @@ def retrieve_memory():
             cur.close()
             conn.close()
 
+
 @app.route('/modify-memory', methods=['PUT'])
 def update_memory():
     memory_id = request.json.get('id')
@@ -134,15 +153,19 @@ def update_memory():
         cur = conn.cursor()
 
         # Fetch the existing memory data
-        cur.execute("SELECT memory_data FROM memory WHERE id = %s;", (memory_id,))
+        cur.execute("SELECT memory_data FROM memory WHERE id = %s;",
+                    (memory_id, ))
         existing_memory = cur.fetchone()
 
         if not existing_memory:
-            return jsonify({"error": f"Memory with ID {memory_id} not found"}), 404
+            return jsonify({"error":
+                            f"Memory with ID {memory_id} not found"}), 404
 
         # Load the existing memory data and update it with the new data
-        existing_data = existing_memory[0]  # This is the current memory_data stored in JSONB
-        existing_data.update(new_memory_data)  # Update with new data (preserving date)
+        existing_data = existing_memory[
+            0]  # This is the current memory_data stored in JSONB
+        existing_data.update(
+            new_memory_data)  # Update with new data (preserving date)
 
         # Perform the update
         sql_update_memory = ''' UPDATE memory
@@ -173,7 +196,7 @@ def delete_memory():
     try:
         sql_delete_memory = 'DELETE FROM memory WHERE id=%s;'
         cur = conn.cursor()
-        cur.execute(sql_delete_memory, (memory_id,))
+        cur.execute(sql_delete_memory, (memory_id, ))
         conn.commit()
         app.logger.info(f"Memory with ID: {memory_id} deleted successfully")
         return jsonify({"message": "Memory deleted successfully!"}), 200
@@ -184,10 +207,16 @@ def delete_memory():
         if conn:
             cur.close()
             conn.close()
-            
+
+
 @app.route('/health-check', methods=['GET'])
 def health_check():
     return jsonify({"status": "OK"}), 200
+
+@app.before_request
+def log_request_info():
+    app.logger.info('Headers: %s', request.headers)
+    app.logger.info('Body: %s', request.get_data())
 
 # Web interface
 @app.route('/')
@@ -195,8 +224,12 @@ def index():
     app.logger.info("Rendering index page")
     return render_template('index.html')
 
+
 if __name__ == '__main__':
-    host = os.getenv('FLASK_HOST', '127.0.0.1')  # Default to 127.0.0.1 if FLASK_HOST is not set
-    port = int(os.getenv('FLASK_PORT', 5000))    # Default to port 5000 if FLASK_PORT is not set
+    host = os.getenv(
+        'FLASK_HOST',
+        '127.0.0.1')  # Default to 127.0.0.1 if FLASK_HOST is not set
+    port = int(os.getenv(
+        'FLASK_PORT', 5000))  # Default to port 5000 if FLASK_PORT is not set
     app.logger.info(f"Starting Flask app on {host}:{port}")
     app.run(debug=True, host=host, port=port)

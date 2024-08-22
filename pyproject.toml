@@ -10,6 +10,7 @@ python = "^3.12"
 flask = "^3.0.3"
 psycopg2-binary = "2.9.9"
 flask-session = "^0.8.0"
+flask-cors = "^4.0.1"
 
 
 [build-system]
